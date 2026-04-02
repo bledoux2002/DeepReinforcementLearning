@@ -111,7 +111,7 @@ class DQNAgent(nn.Module):
 
     
 def main():
-    env = gym.make("CartPole-v1", render_mode="human")
+    env = gym.make("CartPole-v1")
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
     agent_model = DQNAgent(state_size, action_size, activation_fn=nn.Tanh())
@@ -134,7 +134,7 @@ def main():
             state = next_state
             if terminated or truncated:
                 print(f"Episode: {e}/{episodes} | Score: {time_t}")
-                if time_t >= 195:
+                if time_t >= win_condition:
                     consecutive_wins += 1
                     if consecutive_wins == 100:
                         torch.save(agent_model.parameters(), "./weights/consistent.pth")
