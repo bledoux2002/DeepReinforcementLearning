@@ -118,10 +118,14 @@ def main():
     trainer = Trainer(agent_model, action_size=action_size)
     episodes = 5000
 
+    best_time = 0
+    win_condition = 195
+    consecutive_wins = 0
+
     for e in range(episodes):
         state, _ = env.reset()
         state = np.reshape(state, [1, 4])
-        for time_t in range(500):
+        for time_t in range(200):
             # env.render()
             action = trainer.act(state)
             next_state, reward, terminated, truncated, _ = env.step(action)
@@ -130,8 +134,19 @@ def main():
             state = next_state
             if terminated or truncated:
                 print(f"Episode: {e}/{episodes} | Score: {time_t}")
+                if time_t >= 195:
+                    consecutive_wins += 1
+                    if consecutive_wins == 100:
+                        torch.save(agent_model.parameters(), "./weights/consistent.pth")
+                        break
+                else:
+                    consecutive_wins = 0
+                if time_t > best_time:
+                    best_time = time_t
+                    torch.save(agent_model.parameters(), "./weights/best.pth")
                 break
         trainer.replay(32)
+
 
 
 if __name__ == "__main__":
