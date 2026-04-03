@@ -116,13 +116,16 @@ def main():
     action_size = env.action_space.n
     agent_model = DQNAgent(state_size, action_size, activation_fn=nn.Tanh())
     trainer = Trainer(agent_model, action_size=action_size)
-    episodes = 5000
+    # episodes = 5000
 
     best_time = 0
     win_condition = 195
     consecutive_wins = 0
 
-    for e in range(episodes):
+    # for e in range(episodes):
+    e = 1
+    avg_time = 0
+    while True:
         state, _ = env.reset()
         state = np.reshape(state, [1, 4])
         for time_t in range(200):
@@ -133,19 +136,26 @@ def main():
             trainer.remember(state, action, reward, next_state, terminated or truncated)
             state = next_state
             if terminated or truncated:
-                print(f"Episode: {e}/{episodes} | Score: {time_t}")
+                avg_time += time_t
+                if e % 100 == 0:
+                    # Display avg score (time lasted) over last 100 episodes
+                    print(f"Episode: {e} | Average Score: {avg_time / 100}")
+                    avg_time = 0
                 if time_t >= win_condition:
                     consecutive_wins += 1
                     if consecutive_wins == 100:
-                        torch.save(agent_model.parameters(), "./weights/consistent.pth")
+                        torch.save(agent_model.state_dict(), "./weights/consistent.pth")
                         break
                 else:
                     consecutive_wins = 0
                 if time_t > best_time:
                     best_time = time_t
-                    torch.save(agent_model.parameters(), "./weights/best.pth")
+                    torch.save(agent_model.state_dict(), "./weights/best.pth")
                 break
         trainer.replay(32)
+        e += 1
+    print(f"Best time: {best_time}")
+    print(f"Longest win streak: {consecutive_wins}")
 
 
 
