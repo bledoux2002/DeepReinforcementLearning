@@ -154,15 +154,15 @@ def main():
                     trainer.replay(128)
                 if time_t >= win_condition:
                     consecutive_wins += 1
-                    if consecutive_wins == 100:
+                    if consecutive_wins >= 100:
                         # torch.save(agent_model.state_dict(), "./weights/consistent.pth")
                         checkpoint = {
-                        "model_state_dict": agent_model.state_dict(),
-                        "memory": list(trainer.memory),
-                        "epsilon": trainer.epsilon,
-                    }
-                    torch.save(checkpoint, "./weights/consistent.pth")
-                    training = False
+                            "model_state_dict": agent_model.state_dict(),
+                            "memory": list(trainer.memory),
+                            "epsilon": trainer.epsilon,
+                        }
+                        torch.save(checkpoint, "./weights/consistent.pth")
+                        training = False
                 else:
                     consecutive_wins = 0
                 if time_t > best_time:
