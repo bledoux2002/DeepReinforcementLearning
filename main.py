@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import random
+import os
 
 class Trainer():
     """
@@ -13,11 +14,11 @@ class Trainer():
     def __init__(self,
                  model: nn.Module,
                  action_size: int,
-                 memory: int = 2000,
+                 memory: int = 2048,
                  gamma: float = 0.95,
                  epsilon: float = 1.0,
                  epsilon_min: float = 0.01,
-                 epsilon_decay: float = 0.99999,
+                 epsilon_decay: float = 0.999,
                  learning_rate: float = 0.001,
                 ):
         self.model = model
@@ -116,6 +117,14 @@ def main():
     action_size = env.action_space.n
     agent_model = DQNAgent(state_size, action_size, activation_fn=nn.Tanh())
     trainer = Trainer(agent_model, action_size=action_size)
+    best_weights_path = "./weights/best.pth"
+    if os.path.exists(best_weights_path):
+        checkpoint = torch.load(best_weights_path, map_location=torch.device("cpu"))
+        agent_model.load_state_dict(checkpoint["model_state_dict"])
+        trainer.memory = checkpoint["memory"]
+        trainer.epsilon = checkpoint["epsilon"]
+        print(f"Loaded existing weights, memory, and epsilon from {best_weights_path}")
+
     # episodes = 5000
 
     best_time = 0
@@ -125,7 +134,8 @@ def main():
     # for e in range(episodes):
     e = 1
     avg_time = 0
-    while True:
+    training = True
+    while training:
         state, _ = env.reset()
         state = np.reshape(state, [1, 4])
         for time_t in range(200):
@@ -139,20 +149,32 @@ def main():
                 avg_time += time_t
                 if e % 100 == 0:
                     # Display avg score (time lasted) over last 100 episodes
-                    print(f"Episode: {e} | Average Time: {avg_time / 100} | Exploration Rate: {trainer.epsilon*100:.2f}")
+                    print(f"Episode: {e} | Average Time: {avg_time / 100:.2f} | Exploration Rate: {trainer.epsilon*100:.2f}%")
                     avg_time = 0
+                    trainer.replay(128)
                 if time_t >= win_condition:
                     consecutive_wins += 1
                     if consecutive_wins == 100:
-                        torch.save(agent_model.state_dict(), "./weights/consistent.pth")
-                        break
+                        # torch.save(agent_model.state_dict(), "./weights/consistent.pth")
+                        checkpoint = {
+                        "model_state_dict": agent_model.state_dict(),
+                        "memory": list(trainer.memory),
+                        "epsilon": trainer.epsilon,
+                    }
+                    torch.save(checkpoint, "./weights/consistent.pth")
+                    training = False
                 else:
                     consecutive_wins = 0
                 if time_t > best_time:
                     best_time = time_t
-                    torch.save(agent_model.state_dict(), "./weights/best.pth")
+                    # torch.save(agent_model.state_dict(), "./weights/best.pth")
+                    checkpoint = {
+                        "model_state_dict": agent_model.state_dict(),
+                        "memory": list(trainer.memory),
+                        "epsilon": trainer.epsilon,
+                    }
+                    torch.save(checkpoint, "./weights/best.pth")
                 break
-        trainer.replay(32)
         e += 1
     print(f"Best time: {best_time}")
     print(f"Longest win streak: {consecutive_wins}")
