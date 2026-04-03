@@ -17,7 +17,7 @@ class Trainer():
                  gamma: float = 0.95,
                  epsilon: float = 1.0,
                  epsilon_min: float = 0.01,
-                 epsilon_decay: float = 0.995,
+                 epsilon_decay: float = 0.99999,
                  learning_rate: float = 0.001,
                 ):
         self.model = model
@@ -76,7 +76,7 @@ class Trainer():
             self.optimizer.step()
         
         if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
 class DQNAgent(nn.Module):
     def __init__(self,
@@ -139,7 +139,7 @@ def main():
                 avg_time += time_t
                 if e % 100 == 0:
                     # Display avg score (time lasted) over last 100 episodes
-                    print(f"Episode: {e} | Average Score: {avg_time / 100}")
+                    print(f"Episode: {e} | Average Time: {avg_time / 100} | Exploration Rate: {trainer.epsilon*100:.2f}")
                     avg_time = 0
                 if time_t >= win_condition:
                     consecutive_wins += 1
