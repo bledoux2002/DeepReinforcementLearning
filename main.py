@@ -6,6 +6,7 @@ import torch.optim as optim
 import numpy as np
 import random
 import os
+import json
 
 class Trainer():
     """
@@ -18,7 +19,7 @@ class Trainer():
                  gamma: float = 0.95,
                  epsilon: float = 1.0,
                  epsilon_min: float = 0.01,
-                 epsilon_decay: float = 0.999,
+                 epsilon_decay: float = 0.9999,
                  learning_rate: float = 0.001,
                 ):
         self.model = model
@@ -112,34 +113,46 @@ class DQNAgent(nn.Module):
 
     
 def main():
-    env = gym.make("CartPole-v1")
+    env = gym.make("CartPole-v1", render_mode=None) #render mode can be "human"
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
     agent_model = DQNAgent(state_size, action_size, activation_fn=nn.Tanh())
     trainer = Trainer(agent_model, action_size=action_size)
-    best_weights_path = "./weights/best.pth"
-    if os.path.exists(best_weights_path):
-        checkpoint = torch.load(best_weights_path, map_location=torch.device("cpu"))
-        agent_model.load_state_dict(checkpoint["model_state_dict"])
-        trainer.memory = checkpoint["memory"]
-        trainer.epsilon = checkpoint["epsilon"]
-        print(f"Loaded existing weights, memory, and epsilon from {best_weights_path}")
-
-    # episodes = 5000
-
+    models_path = "./models"
     best_time = 0
-    win_condition = 195
-    consecutive_wins = 0
+    if os.path.exists(f'{models_path}/best_weights.pth') and os.path.exists(f'{models_path}/best_hyperparams.json'):
+        agent_model.load_state_dict(torch.load(f'{models_path}/best_weights.pth', map_location=torch.device("cpu")))
+        with open(f'{models_path}/best_hyperparams.json', 'r', encoding='utf-8') as file:
+            checkpoint = json.load(file)
+            best_time = checkpoint["time"]
+            trainer.epsilon = checkpoint["epsilon"]
+            saved_memory = checkpoint.get("memory", [])
+            # trainer.memory.clear()
+            trainer.memory.extend(
+                (
+                    np.asarray(state, dtype=np.float32),
+                    int(action),
+                    float(reward),
+                    np.asarray(next_state, dtype=np.float32),
+                    bool(done),
+                )
+                for state, action, reward, next_state, done in saved_memory
+            )
+        print(f"Loaded existing weights, memory, and epsilon from longest-lasting model")
 
-    # for e in range(episodes):
+    win_condition = 195
+    time_limit = 200
+    consecutive_wins = 0
+    win_limit = 100
     e = 1
     avg_time = 0
+    batch_size = 32
+
     training = True
     while training:
         state, _ = env.reset()
         state = np.reshape(state, [1, 4])
-        for time_t in range(200):
-            # env.render()
+        for time_t in range(time_limit):
             action = trainer.act(state)
             next_state, reward, terminated, truncated, _ = env.step(action)
             next_state = np.reshape(next_state, [1, 4])
@@ -151,29 +164,50 @@ def main():
                     # Display avg score (time lasted) over last 100 episodes
                     print(f"Episode: {e} | Average Time: {avg_time / 100:.2f} | Exploration Rate: {trainer.epsilon*100:.2f}%")
                     avg_time = 0
-                    trainer.replay(128)
                 if time_t >= win_condition:
                     consecutive_wins += 1
-                    if consecutive_wins >= 100:
-                        # torch.save(agent_model.state_dict(), "./weights/consistent.pth")
-                        checkpoint = {
-                            "model_state_dict": agent_model.state_dict(),
-                            "memory": list(trainer.memory),
-                            "epsilon": trainer.epsilon,
-                        }
-                        torch.save(checkpoint, "./weights/consistent.pth")
+                    if consecutive_wins >= win_limit:
+                        torch.save(agent_model.state_dict(), "./models/finished_weights.pth")
+                        with open('./models/finished_hyperparams.json', 'w', encoding='utf-8') as file:
+                            checkpoint = {
+                                "epsilon": trainer.epsilon,
+                                "memory": [
+                                    (
+                                        np.asarray(state).tolist(),
+                                        int(action),
+                                        float(reward),
+                                        np.asarray(next_state).tolist(),
+                                        bool(done),
+                                    )
+                                    for state, action, reward, next_state, done in trainer.memory
+                                ]
+                            }
+                            json.dump(checkpoint, file)
                         training = False
                 else:
                     consecutive_wins = 0
                 if time_t > best_time:
                     best_time = time_t
-                    # torch.save(agent_model.state_dict(), "./weights/best.pth")
-                    checkpoint = {
-                        "model_state_dict": agent_model.state_dict(),
-                        "memory": list(trainer.memory),
-                        "epsilon": trainer.epsilon,
-                    }
-                    torch.save(checkpoint, "./weights/best.pth")
+
+                    torch.save(agent_model.state_dict(), "./models/best_weights.pth")
+                    with open('./models/best_hyperparams.json', 'w', encoding='utf-8') as file:
+                        checkpoint = {
+                            "time": time_t,
+                            "epsilon": trainer.epsilon,
+                            # "memory": list(trainer.memory),
+                            "memory": [
+                                (
+                                    np.asarray(state).tolist(),
+                                    int(action),
+                                    float(reward),
+                                    np.asarray(next_state).tolist(),
+                                    bool(done),
+                                )
+                                for state, action, reward, next_state, done in trainer.memory
+                            ]
+                        }
+                        json.dump(checkpoint, file)
+                trainer.replay(batch_size)
                 break
         e += 1
     print(f"Best time: {best_time}")
